@@ -4,12 +4,25 @@ Interrupts and Interrupt Handling. Part 4.
 Initialization of non-early interrupt gates
 --------------------------------------------------------------------------------
 
+<!---
 This is fourth part about an interrupts and exceptions handling in the Linux kernel and in the previous [part](http://0xax.gitbooks.io/linux-insides/content/interrupts/interrupts-3.html) we saw first early `#DB` and `#BP` exceptions handlers from the [arch/x86/kernel/traps.c](https://github.com/torvalds/linux/tree/master/arch/x86/kernel/traps.c). We stopped on the right after the `early_trap_init` function that called in the `setup_arch` function which defined in the [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/tree/master/arch/x86/kernel/setup.c). In this part we will continue to dive into an interrupts and exceptions handling in the Linux kernel for `x86_64` and continue to do it from the place where we left off in the last part. First thing which is related to the interrupts and exceptions handling is the setup of the `#PF` or [page fault](https://en.wikipedia.org/wiki/Page_fault) handler with the `early_trap_pf_init` function. Let's start from it.
+--->
+これは、Linuxカーネルの割り込み処理と例外処理４つめのパートです。
+前の[パート]](http://0xax.gitbooks.io/linux-insides/content/interrupts/interrupts-3.html)では、最初の早い段階での [arch/x86/kernel/traps.c](https://github.com/torvalds/linux/tree/master/arch/x86/kernel/traps.c) に定義された `#DB` 例外ハンドラと `#BP` 例外ハンドラとを見ました。
+ちょうど [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/tree/master/arch/x86/kernel/setup.c) 内で定義された `setup_arch` 関数から呼ばれる `early_trap_init` 関数のあとで止まっています。
+このパートでは、 `x86_64` 向けの Linuxカーネルの割り込み処理と例外処理へ潜っていきます。
+最後のパートで中断した場所から続けます。
+割り込み処理と例外処理に関する最初のものは、 `early_trap_pf_init` 関数による `#PF` （[page fault](https://en.wikipedia.org/wiki/Page_fault)）ハンドラの設定です。
+
 
 Early page fault handler
 --------------------------------------------------------------------------------
 
+<!---
 The `early_trap_pf_init` function defined in the [arch/x86/kernel/traps.c](https://github.com/torvalds/linux/tree/master/arch/x86/kernel/traps.c). It uses `set_intr_gate` macro that fills [Interrupt Descriptor Table](https://en.wikipedia.org/wiki/Interrupt_descriptor_table) with the given entry:
+--->
+`early_trap_pf_init` 関数は、[arch/x86/kernel/traps.c](https://github.com/torvalds/linux/tree/master/arch/x86/kernel/traps.c) に定義されます。
+与えられたエントリで [Interrupt Descriptor Table](https://en.wikipedia.org/wiki/Interrupt_descriptor_table) を埋める `set_intr_gate` マクロを使います：
 
 ```C
 void __init early_trap_pf_init(void)
@@ -20,7 +33,11 @@ void __init early_trap_pf_init(void)
 }
 ```
 
+<!---
 This macro defined in the [arch/x86/include/asm/desc.h](https://github.com/torvalds/linux/tree/master/arch/x86/include/asm/desc.h). We already saw macros like this in the previous [part](http://0xax.gitbooks.io/linux-insides/content/interrupts/interrupts-3.html) - `set_system_intr_gate` and `set_intr_gate_ist`. This macro checks that given vector number is not greater than `255` (maximum vector number) and calls `_set_gate` function as `set_system_intr_gate` and `set_intr_gate_ist` did it:
+--->
+このマクロは、[arch/x86/include/asm/desc.h](https://github.com/torvalds/linux/tree/master/arch/x86/include/asm/desc.h)で定義されます。前の[パート](http://0xax.gitbooks.io/linux-insides/content/interrupts/interrupts-3.html) で似たようなマクロ、 `set_system_intr_gate` マクロと `set_intr_gate_ist` マクロとを見ました。
+このマクロは、`set_system_intr_gate` マクロと `set_intr_gate_ist` マクロ がしたように、与えられたヴェクタ番号が `255` （最大ヴェクタ番号）を超えていないかを検査し、 `_set_gate` 関数を呼びます。
 
 ```C
 #define set_intr_gate(n, addr)                                  \
@@ -33,17 +50,29 @@ do {                                                            \
 } while (0)
 ```
 
+<!---
 The `set_intr_gate` macro takes two parameters:
-
+--->
+`set_intr_gate` マクロは２つのパラメータをとります：
+<!---
 * vector number of a interrupt;
 * address of an interrupt handler;
+--->
+* 割り込みのヴェクタ番号
+* 割り込みハンドラのアドレス
 
+<!---
 In our case they are:
+--->
+ここでは：
 
 * `X86_TRAP_PF` - `14`;
 * `page_fault` - the interrupt handler entry point.
 
+<!---
 The `X86_TRAP_PF` is the element of enum which defined in the [arch/x86/include/asm/traprs.h](https://github.com/torvalds/linux/tree/master/arch/x86/include/asm/traprs.h):
+--->
+`X86_TRAP_PF` は [arch/x86/include/asm/traprs.h](https://github.com/torvalds/linux/tree/master/arch/x86/include/asm/traprs.h) で定義された enum要素です。
 
 ```C
 enum {
@@ -58,13 +87,21 @@ enum {
 }
 ```
 
+<!---
 When the `early_trap_pf_init` will be called, the `set_intr_gate` will be expanded to the call of the `_set_gate` which will fill the `IDT` with the handler for the page fault. Now let's look on the implementation of the `page_fault` handler. The `page_fault` handler defined in the [arch/x86/kernel/entry_64.S](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/entry_64.S) assembly source code file as all exceptions handlers. Let's look on it:
+--->
+`early_trap_pf_init` が呼ばれたとき、 `set_intr_gate` は ページフォールトのためのハンドラで `IDT` を埋める `_set_gate` の呼び出しに展開されます。
 
 ```assembly
 trace_idtentry page_fault do_page_fault has_error_code=1
 ```
 
+<!---
 We saw in the previous [part](http://0xax.gitbooks.io/linux-insides/content/interrupts/interrupts-3.html) how `#DB` and `#BP` handlers defined. They were defined with the `idtentry` macro, but here we can see `trace_idtentry`. This macro defined in the same source code file and depends on the `CONFIG_TRACING` kernel configuration option:
+--->
+前の[パート](http://0xax.gitbooks.io/linux-insides/content/interrupts/interrupts-3.html)で、 `#DB` と `#BP` のハンドラがどのように定義されたのかを見ました。
+例外ハンドラは、 `idtentry` マクロで定義されましたが、ここでは `trace_idtentry` と見えます。
+このマクロは同じソースコードファイルで定義され、 `CONFIG_TRACING` カーネルコンフィギュレーションオプションに依存しています：
 
 ```assembly
 #ifdef CONFIG_TRACING
@@ -79,14 +116,31 @@ idtentry \sym \do_sym has_error_code=\has_error_code
 #endif
 ```
 
+<!---
 We will not dive into exceptions [Tracing](https://en.wikipedia.org/wiki/Tracing_%28software%29) now. If `CONFIG_TRACING` is not set, we can see that `trace_idtentry` macro just expands to the normal `idtentry`. We already saw implementation of the `idtentry` macro in the previous [part](http://0xax.gitbooks.io/linux-insides/content/interrupts/interrupts-3.html), so let's start from the `page_fault` exception handler.
+--->
+今、例外[Tracing](https://en.wikipedia.org/wiki/Tracing_%28software%29) は考えません。
+`CONFIG_TRACING` がセットされていなければ、 `trace_idtentry` マクロは 通常の `idtentry` マクロへ展開されます。
+前の[パート](http://0xax.gitbooks.io/linux-insides/content/interrupts/interrupts-3.html) で すでに `idtentry` マクロの実装は見ましたので、 `page_fault` 例外ハンドラから始めましょう。
 
+<!---
 As we can see in the `idtentry` definition, the handler of the `page_fault` is `do_page_fault` function which defined in the [arch/x86/mm/fault.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/mm/fault.c) and as all exceptions handlers it takes two arguments:
-
+--->
+`idtentry` マクロの定義から判るように、`page_fault` のハンドラは、[arch/x86/mm/fault.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/mm/fault.c) に定義された `do_page_fault` 関数です。
+また、全ての例外ハンドラは２つの引数をとります。
+<!---
 * `regs` - `pt_regs` structure that holds state of an interrupted process;
 * `error_code` - error code of the page fault exception.
+--->
 
+* `regs` - 割り込んだプロセスの状態を保持する `pt_regs` 構造体
+* `error_code` - ページフォールト例外のエラーコード
+
+<!---
 Let's look inside this function. First of all we read content of the [cr2](https://en.wikipedia.org/wiki/Control_register) control register:
+--->
+この関数の中を見ていきましょう。
+最初は [cr2](https://en.wikipedia.org/wiki/Control_register) 制御レジスタの内容を読みます：
 
 ```C
 dotraplinkage void notrace
@@ -99,7 +153,15 @@ do_page_fault(struct pt_regs *regs, unsigned long error_code)
 }
 ```
 
-This register contains a linear address which caused `page fault`. In the next step we make a call of the `exception_enter` function from the [include/linux/context_tracking.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/context_tracking.h). The `exception_enter` and `exception_exit` are functions from context tracking subsystem in the Linux kernel used by the [RCU](https://en.wikipedia.org/wiki/Read-copy-update) to remove its dependency on the timer tick while a processor runs in userspace. Almost in the every exception handler we will see similar code:
+<!--- [JA] type URL --->
+<!---
+This register contains a linear address which caused `page fault`. In the next step we make a call of the `exception_enter` function from the [include/linux/context_tracking.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/context_tracking.h). The `exception_enter` and `exception_exit` are functions from context tracking subsystem in the Linux kernel used by the [RCU](https://en.wikipedia.org/wiki/Read-copy-update) to remove its dependency on the timer tick while a processor runs in userspace. Almost in the every exception handler we will see similar code:
+--->
+このレジスタは、 `ページフォールト（page fault）` の理由となったリニアアドレスを含みます。
+つぎのステップは、
+[include/linux/context_tracking.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/context_tracking.h) にある `exception_enter` 関数の呼び出しを行うことです。
+`exception_enter` と `exception_exit` は、Linuxカーネルのコンテキストトラッキングサブシステムのプロセッサがユーザ空間で走行する間にタイマーティックに依存することを取り外した [RCU](https://en.wikipedia.org/wiki/Read-copy-update) を用いた関数です。
+
 
 ```C
 enum ctx_state prev_state;
@@ -110,7 +172,12 @@ prev_state = exception_enter();
 exception_exit(prev_state);
 ```
 
+<!---
 The `exception_enter` function checks that `context tracking` is enabled with the `context_tracking_is_enabled` and if it is in enabled state, we get previous context with the `this_cpu_read` (more about `this_cpu_*` operations you can read in the [Documentation](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/Documentation/this_cpu_ops.txt)). After this it calls `context_tracking_user_exit` function which informs the context tracking that the processor is exiting userspace mode and entering the kernel:
+--->
+`exception_enter` 関数は `context_tracking_is_enabled` で `context tracking` が有効であるかを検査します。
+もし有効な状態であれば、 `this_cpu_read` （`this_cpu_*` 操作に関する詳細は、[カーネルドキュメント](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/Documentation/this_cpu_ops.txt)を読めばわかります）で 前のコンテキストを取得します。
+このあと、プロセッサがユーザ空間モードを抜けてカーネルへ入ることをコンテキストトラッキングサブシステムへ通知する `context_tracking_user_exit` 関数を呼びます：
 
 ```C
 static inline enum ctx_state exception_enter(void)
@@ -127,7 +194,10 @@ static inline enum ctx_state exception_enter(void)
 }
 ```
 
+<!---
 The state can be one of the:
+--->
+状態は以下のいずれかとなることができます：
 
 ```C
 enum ctx_state {
@@ -136,13 +206,23 @@ enum ctx_state {
 } state;
 ```
 
+<!---
 And in the end we return previous context. Between the `exception_enter` and `exception_exit` we call actual page fault handler:
+--->
+最後に、前のコンテキストに戻ります。
+`exception_enter` と `exception_exit` の間、実際のページフォールトハンドラを呼びます。
 
 ```C
 __do_page_fault(regs, error_code, address);
 ```
 
+<!---
 The `__do_page_fault` is defined in the same source code file as `do_page_fault` - [arch/x86/mm/fault.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/mm/fault.c). In the beginning of the `__do_page_fault` we check state of the [kmemcheck](https://www.kernel.org/doc/Documentation/kmemcheck.txt) checker. The `kmemcheck` detects warns about some uses of uninitialized memory. We need to check it because page fault can be caused by kmemcheck:
+--->
+`__do_page_fault` は、`do_page_fault` と同じソースコードファイル（[arch/x86/mm/fault.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/mm/fault.c)）で定義されます。
+`__do_page_fault` の最初では、[kmemcheck](https://www.kernel.org/doc/Documentation/kmemcheck.txt) チェッカーの状態を調べます。
+`kmemcheck` は、未初期化メモリを使用することに関する警告を検出します。
+kmemcheckによってページフォールトが引き起こされるので、チェックする必要があります。
 
 ```C
 if (kmemcheck_active(regs))
@@ -150,7 +230,14 @@ if (kmemcheck_active(regs))
 	prefetchw(&mm->mmap_sem);
 ```
 
+<!---
 After this we can see the call of the `prefetchw` which executes instruction with the same [name](http://www.felixcloutier.com/x86/PREFETCHW.html) which fetches [X86_FEATURE_3DNOW](https://en.wikipedia.org/?title=3DNow!) to get exclusive [cache line](https://en.wikipedia.org/wiki/CPU_cache). The main purpose of prefetching is to hide the latency of a memory access. In the next step we check that we got page fault not in the kernel space with the following condition:
+--->
+このあと、[同じ名前](http://www.felixcloutier.com/x86/PREFETCHW.html)の命令を実行する `prefetchw` の呼び出しをみることができます。
+`prefetchw` 関数は、排他的な[キャッシュライン(英)](https://en.wikipedia.org/wiki/CPU_cache)を取得するためのもので、[X86_FEATURE_3DNOW](https://en.wikipedia.org/?title=3DNow!)をフェッチします。
+<!--- [JA] いみわからん --->
+プリフェッチの主な目的は、メモリアクセスのレイテンシを隠すためです。
+つぎのステップで、以下の状態でカーネル空間でページフォールトとなっていないことを検査します：
 
 ```C
 if (unlikely(fault_in_kernel_space(address))) {
@@ -159,8 +246,10 @@ if (unlikely(fault_in_kernel_space(address))) {
 ...
 }
 ```
-
+<!---
 where `fault_in_kernel_space` is:
+--->
+ここで `fault_in_kernel_space` は：
 
 ```C
 static int fault_in_kernel_space(unsigned long address)
@@ -169,20 +258,34 @@ static int fault_in_kernel_space(unsigned long address)
 }
 ```
 
+<!---
 The `TASK_SIZE_MAX` macro expands to the:
+--->
+`TASK_SIZE_MAX` マクロは以下のように展開されます：
 
 ```C
 #define TASK_SIZE_MAX   ((1UL << 47) - PAGE_SIZE)
 ```
-
+<!---
 or `0x00007ffffffff000`. Pay attention on `unlikely` macro. There are two macros in the Linux kernel:
+--->
+あるいは `0x00007ffffffff000` です。
+`unlikely` マクロに注意してください。
+Linuxカーネルには２つのマクロがあります：
 
 ```C
 #define likely(x)      __builtin_expect(!!(x), 1)
 #define unlikely(x)    __builtin_expect(!!(x), 0)
 ```
 
+<!---
 You can [often](http://lxr.free-electrons.com/ident?i=unlikely) find these macros in the code of the Linux kernel. Main purpose of these macros is optimization. Sometimes this situation is that we need to check the condition of the code and we know that it will rarely be `true` or `false`. With these macros we can tell to the compiler about this. For example 
+--->
+Linuxカーネルのコード内で、これらのマクロを[見つけることができます](http://lxr.free-electrons.com/ident?i=unlikely)。
+これらのマクロの主な目的は最適化です。
+このシチュエーションは、コードのを検査するために必要であり、 `true` または `false` となるのが稀であることを知っているときです。
+これらのマクロで、このシチュエーションをコンパイラに伝えることができます。
+たとえば：
 
 ```C
 static int proc_root_readdir(struct file *file, struct dir_context *ctx)
@@ -197,12 +300,32 @@ static int proc_root_readdir(struct file *file, struct dir_context *ctx)
 }
 ```
 
+<!---
 Here we can see `proc_root_readdir` function which will be called when the Linux [VFS](https://en.wikipedia.org/wiki/Virtual_file_system) needs to read the `root` directory contents. If condition marked with `unlikely`, compiler can put `false` code right after branching. Now let's back to the our address check. Comparison between the given address and the `0x00007ffffffff000` will give us to know, was page fault in the kernel mode or user mode. After this check we know it. After this `__do_page_fault` routine will try to understand the problem that provoked page fault exception and then will pass address to the appropriate routine. It can be `kmemcheck` fault, spurious fault, [kprobes](https://www.kernel.org/doc/Documentation/kprobes.txt) fault and etc. Will not dive into implementation details of the page fault exception handler in this part, because we need to know many different concepts which are provided by the Linux kernel, but will see it in the chapter about the [memory management](http://0xax.gitbooks.io/linux-insides/content/mm/index.html) in the Linux kernel.
+--->
+ここで Linux  [VFS](https://en.wikipedia.org/wiki/Virtual_file_system) が `root` ディレクトリの内容を読みだすことが必要な時に呼ばれる `proc_root_readdir` 関数をみましょう。
+もし条件が `unlikely` でマークされていたなら、コンパイラは分岐のあとすぐに `false` であるときのコードを置くことができます。
+アドレスチェックに戻りましょう。
+与えられたアドレスと `0x00007ffffffff000` の比較は、ページフォールトがカーネルモード内なのか、ユーザモード内なのかを知ることを与えてくれます。
+このチェックのあと、知ることができます。
+この `__do_page_fault` ルーチンのあと、ページフォールト例外が引き起こされた問題を理解することを試みて、アドレスを適切なルーチンへ渡します。
+`kmemcheck` fault、spurious fault、 [kprobes](https://www.kernel.org/doc/Documentation/kprobes.txt) fault、その他です。
+このパートでは、Linuxカーネルが提供する多くの異なるコンセプトを知る必要があるので、ページフォールト例外ハンドラの詳しい実装へは潜りません。
+しかし、Linuxカーネルの [memory management](http://0xax.gitbooks.io/linux-insides/content/mm/index.html) に関する章で見ることができます。
+
 
 Back to start_kernel
 --------------------------------------------------------------------------------
 
+<!---
 There are many different function calls after the `early_trap_pf_init` in the `setup_arch` function from different kernel subsystems, but there are no one interrupts and exceptions handling related. So, we have to go back where we came from - `start_kernel` function from the [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c#L492). The first things after the `setup_arch` is the `trap_init` function from the [arch/x86/kernel/traps.c](https://github.com/torvalds/linux/tree/master/arch/x86/kernel/traps.c). This function makes initialization of the remaining exceptions handlers (remember that we already setup 3 handlers for the `#DB` - debug exception, `#BP` - breakpoint exception and `#PF` - page fault exception). The `trap_init` function starts from the check of the [Extended Industry Standard Architecture](https://en.wikipedia.org/wiki/Extended_Industry_Standard_Architecture):
+--->
+`setup_arch` 関数内で、`early_trap_pf_init` のあと、多くの異なるカーネルサブシステムの関数呼び出しがありますが、
+割り込み処理や例外処理に関するものは他にありません。
+よって、来たところ 〜 [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c#L492) の`start_kernel` 関数 〜 へ戻る必要があります。
+`setup_arch` のあとの最初のものは、[arch/x86/kernel/traps.c](https://github.com/torvalds/linux/tree/master/arch/x86/kernel/traps.c) の `trap_init` 関数です。
+この関数は例外ハンドラの残りの初期化を行います（すでに３つのハンドラ、`#DB` - debug exception, `#BP` - breakpoint exception, `#PF` - page fault exception）。
+`trap_init` 関数は、 [Extended Industry Standard Architecture](https://en.wikipedia.org/wiki/Extended_Industry_Standard_Architecture) のチェックから始まります：
 
 ```C
 #ifdef CONFIG_EISA
@@ -214,16 +337,34 @@ There are many different function calls after the `early_trap_pf_init` in the `s
 #endif
 ```
 
+<!---
 Note that it depends on the `CONFIG_EISA` kernel configuration parameter which represents `EISA` support. Here we use `early_ioremap` function to map `I/O` memory on the page tables. We use `readl` function to read first `4` bytes from the mapped region and if they are equal to `EISA` string we set `EISA_bus` to one. In the end we just unmap previously mapped region. More about `early_ioremap` you can read in the part which describes [Fix-Mapped Addresses and ioremap](http://0xax.gitbooks.io/linux-insides/content/mm/linux-mm-2.html).
+--->
+`EISA` をサポートしていることを表す `CONFIG_EISA` カーネルコンフィギュレーションパラメータに依存することに注意してください。
+ページテーブルへ `I/O` メモリをマップするために、 `early_ioremap` 関数を使います。
+マップされた領域から、最初の `4` バイトを読み込むために `readl` 関数を使います。
+もし `EISA` 文字列に等しければ、 `EISA_bus` に１を設定します。
+最後に、以前にマップした領域をアンマップします。
+`early_ioremap` に関する詳細は、[Fix-Mapped Addresses and ioremap](http://0xax.gitbooks.io/linux-insides/content/mm/linux-mm-2.html) が記述されたパートを読めます。
 
+<!---
 After this we start to fill the `Interrupt Descriptor Table` with the different interrupt gates. First of all we set `#DE` or `Divide Error` and `#NMI` or `Non-maskable Interrupt`:
+--->
+このあと、異なる割り込みゲートで `Interrupt Descriptor Table` を埋め始めます。
+最初に、 `#DE` （ `Divide Error` ） と `#NMI` （ `Non-maskable Interrupt` ）を設定します：
 
 ```C
 set_intr_gate(X86_TRAP_DE, divide_error);
 set_intr_gate_ist(X86_TRAP_NMI, &nmi, NMI_STACK);
 ```
 
+<!---
 We use `set_intr_gate` macro to set the interrupt gate for the `#DE` exception and `set_intr_gate_ist` for the `#NMI`. You can remember that we already used these macros when we have set the interrupts gates for the page fault handler, debug handler and etc, you can find explanation of it in the previous [part](http://0xax.gitbooks.io/linux-insides/content/interrupts/interrupts-3.html). After this we setup exception gates for the following exceptions:
+--->
+`#DE` 例外のための割り込みゲートを設定するために `set_intr_gate` マクロを使い、`#NMI` 例外のために `set_intr_gate_ist` マクロを使います。
+これらのマクロはページフォールトハンドラやデバッグハンドラなどで、割り込みゲートを設定した時に、既に使ったことを思い出してください。
+この説明は、[前のパート](http://0xax.gitbooks.io/linux-insides/content/interrupts/interrupts-3.html) で見つけることができます。
+このあと、以下の例外のために例外ゲートの設定をします：
 
 ```C
 set_system_intr_gate(X86_TRAP_OF, &overflow);
@@ -231,23 +372,42 @@ set_intr_gate(X86_TRAP_BR, bounds);
 set_intr_gate(X86_TRAP_UD, invalid_op);
 set_intr_gate(X86_TRAP_NM, device_not_available);
 ```
-
+<!---
 Here we can see:
 
 * `#OF` or `Overflow` exception. This exception indicates that an overflow trap occurred when an special [INTO](http://x86.renejeschke.de/html/file_module_x86_id_142.html) instruction was executed;
 * `#BR` or `BOUND Range exceeded` exception. This exception indicates that a `BOUND-range-exceed` fault occurred when a [BOUND](http://pdos.csail.mit.edu/6.828/2005/readings/i386/BOUND.htm) instruction was executed;
 * `#UD` or `Invalid Opcode` exception. Occurs when a processor attempted to execute invalid or reserved [opcode](https://en.wikipedia.org/?title=Opcode), processor attempted to execute instruction with invalid operand(s) and etc;
 * `#NM` or `Device Not Available` exception. Occurs when the processor tries to execute `x87 FPU` floating point instruction while `EM` flag in the [control register](https://en.wikipedia.org/wiki/Control_register#CR0) `cr0` was set.
+--->
+ここで：
 
+* `#OF` - `Overflow` 例外。この例外は、特別な [INTO](http://x86.renejeschke.de/html/file_module_x86_id_142.html) 命令が実行された時にオーバーフロートラップが発生したことを示す。
+* `#BR` - `BOUND Range exceeded` 例外。この例外は、[BOUND](http://pdos.csail.mit.edu/6.828/2005/readings/i386/BOUND.htm) 命令が実行された時に `BOUND-range-exceed` フォールトが発生したことを示す。
+* `#UD` - `Invalid Opcode` 例外。
+プロセッサが無効または予約されたオペコードを実行しようとしたとき、プロセッサが無効なオペランドなどを使用して命令を実行しようとしたときに発生します。
+* `#NM` - `Device Not Available` 例外。[control register](https://en.wikipedia.org/wiki/Control_register#CR0) `cr0` の `EM` フラッグがセットされている間に`x87 FPU` 浮動小数点命令を実行することを試みる時に発生する。
+
+<!---
 In the next step we set the interrupt gate for the `#DF` or `Double fault` exception:
+--->
+つぎのステップでは、 `#DF` `Dbouble fault` 例外の割り込みゲートを設定します：
 
 ```C
 set_intr_gate_ist(X86_TRAP_DF, &double_fault, DOUBLEFAULT_STACK);
 ```
 
+<!---
 This exception occurs when processor detected a second exception while calling an exception handler for a prior exception. In usual way when the processor detects another exception while trying to call an exception handler, the two exceptions can be handled serially. If the processor cannot handle them serially, it signals the double-fault or `#DF` exception.
+--->
+この例外は、事前の例外の例外ハンドラを呼び出している間に、プロセッサが２つ目の例外を検出した時に発生します。
+通常、例外ハンドラを呼び出すことを試みている間に、プロセッサが他の例外を検出した時には、２つの例外はシリーズに処理することができます。
+もしプロセッサがシリーズに処理できなければ、`#DF` 例外（doule-fault）が伝達されます。
 
+<!---
 The following set of the interrupt gates is:
+--->
+次の割り込みゲートのセットは次のとおりです。
 
 ```C
 set_intr_gate(X86_TRAP_OLD_MF, &coprocessor_segment_overrun);
@@ -260,6 +420,7 @@ set_intr_gate(X86_TRAP_MF, &coprocessor_error);
 set_intr_gate(X86_TRAP_AC, &alignment_check);
 ```
 
+<!---
 Here we can see setup for the following exception handlers:
 
 * `#CSO` or `Coprocessor Segment Overrun` - this exception indicates that math [coprocessor](https://en.wikipedia.org/wiki/Coprocessor) of an old processor detected a page or segment violation. Modern processors do not generate this exception
@@ -270,8 +431,28 @@ Here we can see setup for the following exception handlers:
 * `Spurious Interrupt` - a hardware interrupt that is unwanted.
 * `#MF` or `x87 FPU Floating-Point Error` exception caused when the [x87 FPU](https://en.wikipedia.org/wiki/X86_instruction_listings#x87_floating-point_instructions) has detected a floating point error.
 * `#AC` or `Alignment Check` exception Indicates that the processor detected an unaligned memory operand when alignment checking was enabled.
+--->
+以下の例外ハンドラをセットアップしていることが見えます：
 
+* `#CSO` - `Coprocessor Segment Overrun` - この例外は古いプロセッサの算術演算[コプロセッサ(英)](https://en.wikipedia.org/wiki/Coprocessor)がページ違反またはセグメント違反を検出したことを示します。モダンなプロセッサはこの例外を発生しません。
+* `#TS` - `Invalid TSS` exception - [Task State Segment](https://en.wikipedia.org/wiki/Task_state_segment) に関連するエラーがあることを示します。
+* `#NP` - `Segment Not Present` 例外は、`cs`, `ds`, `es`, `fs`, `gs` レジスタのうち１つをローとする間に、セグメントの `present flag` またはゲートデスクリプタがクリアされたことを示します。
+* `#SS` - `Stack Fault` 例外は、スタック関連の状態の１つが検出されたことを示します。例えば、 `ss` レジスタをロードしようとすると、not-present stack segment（存在しないスタックセグメント）が検出されます。
+* `#GP` - `General Protection` （一般保護）例外は、
+プロセッサが、一般保護違反と呼ばれる保護違反のクラスの１つを検出したことを示します。
+一般保護違反を引き起こすことができる状態は、たくさんあります。例えば、
+ - システムセグメントのために、セグメントレジスタで、 `ss`, `ds`, `es`, `fs`, `gs` レジスタを読み込む場合
+ - コードセグメントや読み込み専用データセグメントへ書き込む場合
+ - 割り込み、トラップ、タスクゲート以外から、`Interrupt Descriptor Table` 内のエントリを参照する場合
+ - and more...
+* `SUPRIOUS` - [Spurious Interrupt](http://wiki.osdev.org/8259_PIC#Spurious_IRQs) - 不要なハードウェア割り込みが発生したとき
+* `#MF` - `x87 FPU Floating-Point Error` 例外は[x87 FPU](https://en.wikipedia.org/wiki/X86_instruction_listings#x87_floating-point_instructions) が浮動小数点エラーを検出したときに発生します。
+* `#AC` - `Alignment Check` 例外は、プロセッサがアライメントチェックが有効なときに、メモリオペランドがアライメントされていないことを検出したことを示します
+
+<!---
 After that we setup this exception gates, we can see setup of the `Machine-Check` exception:
+--->
+この例外ゲートの設定のあと、 `Machine-Check` 例外の設定を見ることができます：
 
 ```C
 #ifdef CONFIG_X86_MCE
@@ -279,13 +460,22 @@ After that we setup this exception gates, we can see setup of the `Machine-Check
 #endif
 ```
 
+<!---
 Note that it depends on the `CONFIG_X86_MCE` kernel configuration option and indicates that the processor detected an internal [machine error](https://en.wikipedia.org/wiki/Machine-check_exception) or a bus error, or that an external agent detected a bus error. The next exception gate is for the [SIMD](https://en.wikipedia.org/?title=SIMD) Floating-Point exception:
+--->
+ `CONFIG_X86_MCE` カーネルコンフィギュレーションオプションに依存することに注意してください。
+`MCE` は、プロセッサが内部[マシンエラー(英)](https://en.wikipedia.org/wiki/Machine-check_exception)またはバスエラーを検出したか、外部エージェントがバスエラーを検出したことを示します。
+つぎの例外ゲートは、 [SIMD](https://en.wikipedia.org/?title=SIMD) Floating-Point 例外です：
 
 ```C
 set_intr_gate(X86_TRAP_XF, &simd_coprocessor_error);
 ```
 
+<!---
 which indicates the processor has detected an `SSE` or `SSE2` or `SSE3` SIMD floating-point exception. There are six classes of numeric exception conditions that can occur while executing an SIMD floating-point instruction:
+--->
+プロセッサが、 `SSE` or `SSE2` or `SSE3` SIMD floating-point 例外を検出したことを示します。
+SIMD floating-point 命令を実行している間に生じることがある算術例外状態の６つのクラスがあります。
 
 * Invalid operation
 * Divide-by-zero
@@ -294,13 +484,19 @@ which indicates the processor has detected an `SSE` or `SSE2` or `SSE3` SIMD flo
 * Numeric underflow
 * Inexact result (Precision)
 
+<!---
 In the next step we fill the `used_vectors` array which defined in the [arch/x86/include/asm/desc.h](https://github.com/torvalds/linux/tree/master/arch/x86/include/asm/desc.h) header file and represents `bitmap`:
+--->
+つぎのステップでは、 [arch/x86/include/asm/desc.h](https://github.com/torvalds/linux/tree/master/arch/x86/include/asm/desc.h) ヘッダファイルで定義された：
 
 ```C
 DECLARE_BITMAP(used_vectors, NR_VECTORS);
 ```
-
+<!---
 of the first `32` interrupts (more about bitmaps in the Linux kernel you can read in the part which describes [cpumasks and bitmaps](http://0xax.gitbooks.io/linux-insides/content/Concepts/cpumask.html))
+--->
+最初の `32` の割り込みの `bitmap` を表す `used_vectors` を埋めます。
+（Linuxカーネルのbitmapsに関する詳細は、[cpumasks and bitmaps](http://0xax.gitbooks.io/linux-insides/content/Concepts/cpumask.html) を記述したパートを読むことができます）：
 
 ```C
 for (i = 0; i < FIRST_EXTERNAL_VECTOR; i++)
@@ -313,7 +509,10 @@ where `FIRST_EXTERNAL_VECTOR` is:
 #define FIRST_EXTERNAL_VECTOR           0x20
 ```
 
+<!---
 After this we setup the interrupt gate for the `ia32_syscall` and add `0x80` to the `used_vectors` bitmap:
+--->
+このあと、 `ia32_syscall` の割り込みゲートを設定し、 `used_vectors` に `0x80` を加算します：
 
 ```C
 #ifdef CONFIG_IA32_EMULATION
@@ -322,14 +521,30 @@ After this we setup the interrupt gate for the `ia32_syscall` and add `0x80` to 
 #endif
 ```
 
+<!---
 There is `CONFIG_IA32_EMULATION` kernel configuration option on `x86_64` Linux kernels. This option provides ability to execute 32-bit processes in compatibility-mode. In the next parts we will see how it works, in the meantime we need only to know that there is yet another interrupt gate in the `IDT` with the vector number `0x80`. In the next step we maps `IDT` to the fixmap area:
+--->
+`x86_64` Linuxカーネルの `CONFIG_IA32_EMULATION` カーネルコンフィギュレーションオプションがあります。
+このオプションは、32bitプロセス互換モード機能を提供します。
+次のパートでは、これがどのように機能するのかを見ます。
+ここでは、 `IDT` 内のまだなかった例外ゲートが、 ヴェクタ番号 `0x80` にあることを知っておくだけで良いです。
+つぎのステップでは、 `IDT` を固定エリアにマップし、：
 
 ```C
 __set_fixmap(FIX_RO_IDT, __pa_symbol(idt_table), PAGE_KERNEL_RO);
 idt_descr.address = fix_to_virt(FIX_RO_IDT);
 ```
 
+<!---
 and write its address to the `idt_descr.address` (more about fix-mapped addresses you can read in the second part of the [Linux kernel memory management](http://0xax.gitbooks.io/linux-insides/content/mm/linux-mm-2.html) chapter). After this we can see the call of the `cpu_init` function that defined in the [arch/x86/kernel/cpu/common.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/cpu/common.c). This function makes initialization of the all `per-cpu` state. In the beginning of the `cpu_init` we do the following things: First of all we wait while current cpu is initialized and than we call the `cr4_init_shadow` function which stores shadow copy of the `cr4` control register for the current cpu and load CPU microcode if need with the following function calls:
+--->
+そのアドレスを `idt_descr.address` へ書き込みます（fix-mapped addressについての詳細は、[Linux kernel memory management](http://0xax.gitbooks.io/linux-insides/content/mm/linux-mm-2.html) の章の２つ目のパートを読むことができます）。
+このあと、[arch/x86/kernel/cpu/common.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/cpu/common.c) で定義された `cpu_init` 関数の呼び出しが見られます。
+この関数は、全ての `per-cpu` 状態の初期化を行います。
+`cpu_init` の最初に、以下のことを行います：
+ - 最初に現在のCPUが初期化完了するまで待ちます
+ - 現在のCPUの `cr4` 制御レジスタのshadow copyを保存する `cr4_init_shadow` 関数を呼びます
+ - もし必要ならば、以下の関数を呼び出してCPUのマイクロコードをロードします
 
 ```C
 wait_for_master_cpu(cpu);
@@ -337,20 +552,30 @@ cr4_init_shadow();
 load_ucode_ap();
 ```
 
+<!---
 Next we get the `Task State Segment` for the current cpu and `orig_ist` structure which represents origin `Interrupt Stack Table` values with the:
+--->
+つぎに、現在のCPUの `Task State Segment` を表す `cpu_tss` と、 `Interrupt Stack Table` 変数の基本を表す `orig_ist` 構造体とを取得します：
 
 ```C
 t = &per_cpu(cpu_tss, cpu);
 oist = &per_cpu(orig_ist, cpu);
 ```
 
+<!---
 As we got values of the `Task State Segment` and `Interrupt Stack Table` for the current processor, we clear following bits in the `cr4` control register:
+--->
+現在のCPUの `Task State Segment` と `Interrupt Stack Table` の値を取得したので、 `cr4` 制御レジスタの以下のビットをクリアします：
 
 ```C
 cr4_clear_bits(X86_CR4_VME|X86_CR4_PVI|X86_CR4_TSD|X86_CR4_DE);
 ```
 
+<!---
 with this we disable `vm86` extension, virtual interrupts, timestamp ([RDTSC](https://en.wikipedia.org/wiki/Time_Stamp_Counter) can only be executed with the highest privilege) and debug extension. After this we reload the `Global Descriptor Table` and `Interrupt Descriptor table` with the:
+--->
+これにより、 `vm86` 拡張、仮想割り込み、タイムスタンプ（[RDTSC](https://en.wikipedia.org/wiki/Time_Stamp_Counter) は、最高の特権でのみ実行することができます）、デバッグ拡張を無効にします。
+このあと、 `Global Descriptor Table` と `Interrupt Descriptor table` とを再読込します：
 
 ```C
 	switch_to_new_gdt(cpu);
@@ -358,7 +583,12 @@ with this we disable `vm86` extension, virtual interrupts, timestamp ([RDTSC](ht
 	load_current_idt();
 ```
 
+<!---
 After this we setup array of the Thread-Local Storage Descriptors, configure [NX](https://en.wikipedia.org/wiki/NX_bit) and load CPU microcode. Now is time to setup and load `per-cpu` Task State Segments. We are going in a loop through the all exception stack which is `N_EXCEPTION_STACKS` or `4` and fill it with `Interrupt Stack Tables`:
+--->
+このあと、スレッドローカルストレージデスクリプタの配列と、[NX](https://en.wikipedia.org/wiki/NX_bit) を設定し、CPUマイクロコードをロードします。
+今、`per-cpu` Task State Segments を設定、ロードする時が来ました。
+全ての例外スタック（ `N_EXCEPTION_STACKS` ないし `4` ）でループし、 `Interrupt Stack Tables` で埋めます：
 
 ```C
 	if (!oist->ist[0]) {
@@ -374,7 +604,10 @@ After this we setup array of the Thread-Local Storage Descriptors, configure [NX
 	}
 ```
 
+<!---
 As we have filled `Task State Segments` with the `Interrupt Stack Tables` we can set `TSS` descriptor for the current processor and load it with the:
+--->
+`Interrupt Stack Tables` で `Task State Segments` を埋めたので、現在のCPUのために `TSS` デスクリプタを設定できました。また、以下の関数でロードすることができました。
 
 ```C
 set_tss_desc(cpu, t);
@@ -382,6 +615,7 @@ load_TR_desc();
 ```
 
 where `set_tss_desc` macro from the [arch/x86/include/asm/desc.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/desc.h) writes given  descriptor to the `Global Descriptor Table` of the given processor:
+ここで、[arch/x86/include/asm/desc.h](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/include/asm/desc.h) の `set_tss_desc` マクロは、与えられたデスクリプタを、与えられたプロセッサの `Global Descriptor Table` へ書きます：
 
 ```C
 #define set_tss_desc(cpu, addr) __set_tss_desc(cpu, GDT_ENTRY_TSS, addr)
@@ -396,7 +630,10 @@ static inline void __set_tss_desc(unsigned cpu, unsigned int entry, void *addr)
 }
 ```
 
+<!---
 and `load_TR_desc` macro expands to the `ltr` or `Load Task Register` instruction:
+--->
+そして、 `load_TR_desc` マクロは `ltr` （ `Load Task Register` ） 命令に展開されます：
 
 ```C
 #define load_TR_desc()                          native_load_tr_desc()
@@ -406,7 +643,10 @@ static inline void native_load_tr_desc(void)
 }
 ```
 
+<!---
 In the end of the `trap_init` function we can see the following code:
+--->
+`trap_init` 関数の最後で、以下のコードを見ることができます：
 
 ```C
 set_intr_gate_ist(X86_TRAP_DB, &debug, DEBUG_STACK);
@@ -421,9 +661,21 @@ set_system_intr_gate_ist(X86_TRAP_BP, &int3, DEBUG_STACK);
 #endif
 ```
 
+<!---
 Here we copy `idt_table` to the `nmi_dit_table` and setup exception handlers for the `#DB` or `Debug exception` and `#BR` or `Breakpoint exception`. You can remember that we already set these interrupt gates in the previous [part](http://0xax.gitbooks.io/linux-insides/content/interrupts/interrupts-3.html), so why do we need to setup it again? We setup it again because when we initialized it before in the `early_trap_init` function, the `Task State Segment` was not ready yet, but now it is ready after the call of the `cpu_init` function.
+--->
+`idt_table` を `nmi_dit_table` にコピーし、`#DB` （ `Debug exception` ）例外と`#BR` （ `Breakpoint exception` ）例外の例外ハンドラを設定します。
+これらの割り込みは、[前のパート](http://0xax.gitbooks.io/linux-insides/content/interrupts/interrupts-3.html)で既に設定したことを思い出すかもしれません。
+何故再び設定が必要なのでしょうか。
+以前に `early_trap_init` 関数内で初期化した時、未だ `Task State Segment` は準備出来ていなかったけれども、今は `cpu_init` 関数の呼び出し後なので準備ができているため、再び設定します。
 
+
+<!---
 That's all. Soon we will consider all handlers of these interrupts/exceptions.
+--->
+以上です。
+まもなく、これらの割り込み/例外のすべてのハンドラについて検討します。
+
 
 Conclusion
 --------------------------------------------------------------------------------
