@@ -320,18 +320,21 @@ The `irq_desc` is array of the `irq` descriptors. It has three already initializ
 `irq_desc`は`irq`デスクリプタの配列です。
 ３つの初期化されたフィールドを持っています。
 
-* `handle_irq` - 上で書いたように、このフィールドはハイレベルのirq-eventハンドラです。
-ここでは、[kernel/irq/handle.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/irq/handle.c)で定義されている、未処理や偽のIRQを処理する`handle_bad_irq`関数で初期化されます。
-* `depth` - IRQラインが有効なときは`0`で、少なくとも１度は割り込みを無効にされて入れば正の値です。
-* `lock` - `IRQ`デスクリプタへのアクセスを直列化（serialize）するために使われるspin lock
-
 <!---
 * `handle_irq` - as I already wrote above, this field is the highlevel irq-event handler. In our case it initialized with the `handle_bad_irq` function that defined in the [kernel/irq/handle.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/irq/handle.c) source code file and handles spurious and unhandled irqs;
 * `depth` - `0` if the IRQ line is enabled and a positive value if it has been disabled at least once;
 * `lock` - A spin lock used to serialize the accesses to the `IRQ` descriptor.
 --->
 
+* `handle_irq` - 上で書いたように、このフィールドはハイレベルのirq-eventハンドラです。
+ここでは、[kernel/irq/handle.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/irq/handle.c)で定義されている、未処理や偽のIRQを処理する`handle_bad_irq`関数で初期化されます。
+* `depth` - IRQラインが有効なときは`0`で、少なくとも１度は割り込みを無効にされて入れば正の値です。
+* `lock` - `IRQ`デスクリプタへのアクセスを直列化（serialize）するために使われるspin lock
+
+<!---
 As we calculated count of the interrupts and initialized our `irq_desc` array, we start to fill descriptors in the loop:
+--->
+割り込みの数の計算と、`irq_desc`配列の初期化をしたので、ループ内でデスクリプタを埋めることを始めます：
 
 ```C
 for (i = 0; i < count; i++) {
@@ -343,9 +346,17 @@ for (i = 0; i < count; i++) {
 }
 ```
 
+<!---
 We are going through the all interrupt descriptors and do the following things:
+--->
+全ての割り込みデスクリプタに対して、以下のことを行います：
 
+<!---
 First of all we allocate [percpu](http://0xax.gitbooks.io/linux-insides/content/Concepts/per-cpu.html) variable for the `irq` kernel statistic with the `alloc_percpu` macro. This macro allocates one instance of an object of the given type for every processor on the system. You can access kernel statistic from the userspace via `/proc/stat`:
+--->
+最初に`irq`カーネル統計情報のための、[percpu](http://0xax.gitbooks.io/linux-insides/content/Concepts/per-cpu.html)変数を`alloc_percpu`マクロで確保します。このマクロはシステム上の全てのプロセッサごとに
+与えられた型のオブジェクトのインスタンスをひとつ確保します。
+カーネル統計情報はユーザ空間からは`/proc/stat`を介してアクセスできます。
 
 ```
 ~$ cat /proc/stat
@@ -359,16 +370,34 @@ cpu3 26648 8 6931 678891 414 0 244 0 0 0
 ...
 ```
 
+<!---
 Where the sixth column is the servicing interrupts. After this we allocate [cpumask](http://0xax.gitbooks.io/linux-insides/content/Concepts/cpumask.html) for the given irq descriptor affinity and initialize the [spinlock](https://en.wikipedia.org/wiki/Spinlock) for the given interrupt descriptor. After this before the [critical section](https://en.wikipedia.org/wiki/Critical_section), the lock will be acquired with a call of the `raw_spin_lock` and unlocked with the call of the `raw_spin_unlock`. In the next step we call the `lockdep_set_class` macro which set the [Lock validator](https://lwn.net/Articles/185666/) `irq_desc_lock_class` class for the lock of the given interrupt descriptor. More about `lockdep`, `spinlock` and other synchronization primitives will be described in the separate chapter.
+--->
+ここで、6つ目の列が割り込みサービスです。このあと、irqデスクリプタアフィ二ティのために[cpumask](http://0xax.gitbooks.io/linux-insides/content/Concepts/cpumask.html) を確保して、割り込みデスクリプタのための[spinlock](https://en.wikipedia.org/wiki/Spinlock)を初期化します。
+このあと、[critical section](https://en.wikipedia.org/wiki/Critical_section)の前に、`raw_spin_lock`の呼び出しでロックを獲得し、`raw_spin_unlock`の呼び出しでアンロックします。
+次のステップは、与えられた割り込みデスクリプタのロックのために、[Lock validator](https://lwn.net/Articles/185666/) `irq_desc_lock_class`クラスを設定する`lockdep_set_class`マクロを呼び出します。
+`lock_depp`、`spinlock`、そのほかの同期プリミティブに関するしょうさいは、ほかの章で描かれるでしょう。
 
+<!---
 In the end of the loop we call the `desc_set_defaults` function from the [kernel/irq/irqdesc.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/irq/irqdesc.c). This function takes four parameters:
-
+--->
+ループの最後に[kernel/irq/irqdesc.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/irq/irqdesc.c) の`desc_set_defaults`関数を呼び出します。
+この関数は4つの引数を取ります：
+<!---
 * number of a irq;
 * interrupt descriptor;
 * online `NUMA` node;
 * owner of interrupt descriptor. Interrupt descriptors can be allocated from modules. This field is need to proved refcount on the module which provides the interrupts;
+--->
+* irq番号
+* 割り込みデスクリプタ
+* オンライン`NUMA`ノード
+* 割り込みデスクリプタのオーナー。割り込みデスクリプタはモジュールから確保できます。このフィールドは割り込みを提供するモジュールのリファレンスカウントを提供するために必要です。
 
 and fills the rest of the `irq_desc` fields. The `desc_set_defaults` function fills interrupt number, `irq` chip, platform-specific per-chip private data for the chip methods, per-IRQ data for the `irq_chip` methods and [MSI](https://en.wikipedia.org/wiki/Message_Signaled_Interrupts) descriptor for the per `irq` and `irq` chip data:
+
+そして、`irq_desc`フィールドの残りを埋めます。
+`desc_set_defaults`関数は、割り込み番号、`irq`チップ、プラットフォーム固有のチップメソッドのためのチップ毎のプライベートデータ、`irq_chip`メソッドのためのIRQ毎のデータ、 `irq`毎と`irq`チップ毎の[MSI](https://en.wikipedia.org/wiki/Message_Signaled_Interrupts)デスクリプタを埋めます:
 
 ```C
 desc->irq_data.irq = irq;
@@ -381,9 +410,15 @@ desc->irq_data.msi_desc = NULL;
 ...
 ```
 
+<!---
 The `irq_data.chip` structure provides general `API` like the `irq_set_chip`, `irq_set_irq_type` and etc, for the irq controller [drivers](https://github.com/torvalds/linux/tree/master/drivers/irqchip). You can find it in the [kernel/irq/chip.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/irq/chip.c) source code file.
+--->
+`irq_data.chip`構造体は、irqコントローラ[ドライバ](https://github.com/torvalds/linux/tree/master/drivers/irqchip)のための、`irq_set_chip`や`irq_set_irq_type`など、汎用の`API`を提供します。
 
+<!---
 After this we set the status of the accessor for the given descriptor and set disabled state of the interrupts:
+--->
+このあと、与えられたデスクリプタのためのアクセッサの状態を設定し、割り込みの状態を無効にします：
 
 ```C
 ...
@@ -396,7 +431,11 @@ irqd_set(&desc->irq_data, IRQD_IRQ_DISABLED);
 ...
 ```
 
+<!---
 In the next step we set the high level interrupt handlers to the `handle_bad_irq` which handles spurious and unhandled irqs (as the hardware stuff is not initialized yet, we set this handler), set `irq_desc.desc` to `1` which means that an `IRQ` is disabled, reset count of the unhandled interrupts and interrupts in general:
+--->
+次のステップでは、高レベル割り込みハンドラを、スプリアス割り込みと未処理の割り込みをハンドルする`handle_bad_irq`に設定します（ハードウェアの初期化がまだなので、このハンドラをセットします）。
+`irq_desc.desc`を`1`にして（`IRQ`が無効にされることを意味します）、未処理割り込みと汎用割り込みのカウンタをリセットします：
 
 ```C
 ...
@@ -597,3 +636,4 @@ Links
 * [MultiProcessor Configuration Table](https://en.wikipedia.org/wiki/MultiProcessor_Specification)
 * [radix tree](http://0xax.gitbooks.io/linux-insides/content/DataStructures/radix-tree.html)
 * [dmesg](https://en.wikipedia.org/wiki/Dmesg)
+よびd
