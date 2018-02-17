@@ -452,14 +452,20 @@ desc->owner = owner;
 ...
 ```
 
+<!---
 After this we go through the all [possible](http://0xax.gitbooks.io/linux-insides/content/Concepts/cpumask.html) processor with the [for_each_possible_cpu](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/cpumask.h#L714) helper and set the `kstat_irqs` to zero for the given interrupt descriptor:
+--->
+このあと、[for_each_possible_cpu](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/include/linux/cpumask.h#L714)ヘルパーで、すべての[possible](http://0xax.gitbooks.io/linux-insides/content/Concepts/cpumask.html)なプロセッサを捜査し、与えられた割り込みデスクリプタの`kstat_irqs`をゼロにセットします：
 
 ```C
 	for_each_possible_cpu(cpu)
 		*per_cpu_ptr(desc->kstat_irqs, cpu) = 0;
 ```
 
+<!---
 and call the `desc_smp_init` function from the [kernel/irq/irqdesc.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/irq/irqdesc.c) that initializes `NUMA` node of the given interrupt descriptor, sets default `SMP` affinity and clears the `pending_mask` of the given interrupt descriptor depends on the value of the `CONFIG_GENERIC_PENDING_IRQ` kernel configuration option:
+--->
+そして、与えられた割り込みデスクリプタの`NUMA`ノードを初期化、デフォルトの`SMP`アフィ二ティを設定、カーネルコンフィギュレーションオプション`CONFIG_GENERIC_PENDING_IRQ`によっては与えられた割り込みデスクリプタの`pending_mask`をクリアする[kernel/irq/irqdesc.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/irq/irqdesc.c)の`desc_smp_init`関数を呼びます。
 
 ```C
 static void desc_smp_init(struct irq_desc *desc, int node)
@@ -472,27 +478,43 @@ static void desc_smp_init(struct irq_desc *desc, int node)
 }
 ```
  
+<!---
 In the end of the `early_irq_init` function we return the return value of the `arch_early_irq_init` function:
+--->
+`early_irq_init`関数の最後で、`arch_early_irq_init`関数の返り値を返します。
 
 ```C
 return arch_early_irq_init();
 ```
 
+<!---
 This function defined in the [kernel/apic/vector.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/apic/vector.c) and contains only one call of the `arch_early_ioapic_init` function from the [kernel/apic/io_apic.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/apic/io_apic.c). As we can understand from the `arch_early_ioapic_init` function's name, this function makes early initialization of the [I/O APIC](https://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller). First of all it make a check of the number of the legacy interrupts with the call of the `nr_legacy_irqs` function. If we have no legacy interrupts with the [Intel 8259](https://en.wikipedia.org/wiki/Intel_8259) programmable interrupt controller we set `io_apic_irqs` to the `0xffffffffffffffff`: 
+--->
+この関数は[kernel/apic/vector.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/apic/vector.c)で定義され、[kernel/apic/io_apic.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/kernel/apic/io_apic.c)の`arch_early_ioapic_init`関数の呼び出しのみを含みます。
+`arch_early_ioapic_init`関数の名前から判るように、この関数は早期の[I/O APIC](https://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller)初期化を行います。
+最初に、`nr_legacy_irqs`関数の呼び出しで、レがし割り込みの数を調べます。
+[Intel 8259](https://en.wikipedia.org/wiki/Intel_8259)プログラマブル割り込みコントローラのレガシ割り込みがない場合は、`io_apic_irqs`に`0xffffffffffffffff`を設定します。
 
 ```C
 if (!nr_legacy_irqs())
 	io_apic_irqs = ~0UL;
 ```
 
+<!---
 After this we are going through the all `I/O APICs` and allocate space for the registers with the call of the `alloc_ioapic_saved_registers`:
+--->
+このあと、すべての`I/O APICs`を走査し、`alloc_ioapic_saved_registers`の呼び出しでレジスタのための領域を確保します：
 
 ```C
 for_each_ioapic(i)
 	alloc_ioapic_saved_registers(i);
 ```
 
+<!---
 And in the end of the `arch_early_ioapic_init` function we are going through the all legacy irqs (from `IRQ0` to `IRQ15`) in the loop and allocate space for the `irq_cfg` which represents configuration of an irq on the given `NUMA` node:
+--->
+`arch_early_ioapic_init`関数の最後に、ループですべてのレガシ割り込み（`IRQ0`から`IRQ15`）を走査し、
+与えられた`NUMA`ノード上の割り込みの設定を表す`irq_cfg`のための領域を確保します。
 
 ```C
 for (i = 0; i < nr_legacy_irqs(); i++) {
@@ -502,12 +524,22 @@ for (i = 0; i < nr_legacy_irqs(); i++) {
 }
 ```
 
+<!---
 That's all.
+--->
+以上ですべてです。
 
 Sparse IRQs
 --------------------------------------------------------------------------------
 
+<!---
 We already saw in the beginning of this part that implementation of the `early_irq_init` function depends on the `CONFIG_SPARSE_IRQ` kernel configuration option. Previously we saw implementation of the `early_irq_init` function when the `CONFIG_SPARSE_IRQ` configuration option is not set, now let's look on the its implementation when this option is set. Implementation of this function very similar, but little differ. We can see the same definition of variables and call of the `init_irq_default_affinity` in the beginning of the `early_irq_init` function:
+--->
+この回の最初で見たように、`early_irq_init`関数の実装は`CONFIG_SPARSE_IRQ`カーネルコンフィギュレーションオプションに依存します。
+以前に、`CONFIG_SPARSE_IRQ` カーネルコンフィギュレーションオプションがオフの時の`early_irq_init`関数の実装を見ました。
+ここではこのオプションがセットされるときの実装について見ていきましょう。
+この関数の実装はとても似ていますが、少し異なります。
+`early_irq_init`関数の最初の、変数の定義と`init_irq_default_affinity`の呼び出しは同じように見えます。
 
 ```C
 #ifdef CONFIG_SPARSE_IRQ
@@ -527,13 +559,26 @@ int __init early_irq_init(void)
 ...
 ```
 
+<!--- 
 But after this we can see the following call:
+--->
+しかし、このあと、以下の呼び出しが見えます：
 
 ```C
 initcnt = arch_probe_nr_irqs();
 ```
 
+<!---
 The `arch_probe_nr_irqs` function defined in the [arch/x86/kernel/apic/vector.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/apic/vector.c) and calculates count of the pre-allocated irqs and update `nr_irqs` with its number. But stop. Why there are pre-allocated irqs? There is alternative form of interrupts called - [Message Signaled Interrupts](https://en.wikipedia.org/wiki/Message_Signaled_Interrupts) available in the [PCI](https://en.wikipedia.org/wiki/Conventional_PCI). Instead of assigning a fixed number of the interrupt request, the device is allowed to record a message at a particular address of RAM, in fact, the display on the [Local APIC](https://en.wikipedia.org/wiki/Advanced_Programmable_Interrupt_Controller#Integrated_local_APICs). `MSI` permits a device to allocate `1`, `2`, `4`, `8`, `16` or `32` interrupts and `MSI-X` permits a device to allocate up to `2048` interrupts. Now we know that irqs can be pre-allocated. More about `MSI` will be in a next part, but now let's look on the `arch_probe_nr_irqs` function. We can see the check which assign amount of the interrupt vectors for the each processor in the system to the `nr_irqs` if it is greater and calculate the `nr` which represents number of `MSI` interrupts:
+--->
+[arch/x86/kernel/apic/vector.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/apic/vector.c)で定義された`arch_probe_nr_irqs`は、事前に確保された割り込みの数の計算と、それで計算した`nr_irqs`とを設定します。
+なぜ事前に確保された割り込みがあるのでしょうか。
+[PCI](https://en.wikipedia.org/wiki/Conventional_PCI)には、[Message Signaled Interrupts](https://en.wikipedia.org/wiki/Message_Signaled_Interrupts)と呼ばれる、代わりの割り込みのフォームがあります。
+デバイスは、割り込み要求の固定値割り当てに変わって、特定のRAMのアドレスにメッセージを記録することを許容されます。
+`MSI`は、デバイスに`1`, `2`, `4`, `8`, `16`, `32`の割り込みを確保することを許可し、`MSI-X`は最大`2048`の割り込み確保することを許可します。
+いま、割り込みは事前に確保されることを知りました。
+`MSI`に関する詳細は次の回にして、`arch_probe_nr_irqs`関数を見ていきましょう。
+システム上の各プロセッサのための割り込みヴェクタより大きいかをチェックし、そうであれば`nr_irqs`への代入を行い、また、`MSI`割り込みの数を表す`nr`を計算します。
 
 ```C
 int nr_irqs = NR_IRQS;
@@ -544,9 +589,20 @@ if (nr_irqs > (NR_VECTORS * nr_cpu_ids))
 nr = (gsi_top + nr_legacy_irqs()) + 8 * nr_cpu_ids;
 ```
 
+<!---
 Take a look on the `gsi_top` variable. Each `APIC` is identified with its own `ID` and with the offset where its `IRQ` starts. It is called `GSI` base or `Global System Interrupt` base. So the `gsi_top` represents it. We get the `Global System Interrupt` base from the [MultiProcessor Configuration Table](https://en.wikipedia.org/wiki/MultiProcessor_Specification) table (you can remember that we have parsed this table in the sixth [part](http://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-6.html) of the Linux Kernel initialization process chapter).
+--->
+`gsi_top`変数に注視してください。
+各`APIC`は自身の`ID`と`IRQ`で始まるオフセットで検出されます。
+`GSI`または`Global System Interrupt` ベースと呼ばれます。
+[MultiProcessor Configuration Table](https://en.wikipedia.org/wiki/MultiProcessor_Specification) から`Global System Interrupt`ベースを取得します
+（このテーブルの分解は、Linux kernel初期化プロセスの章、[第六回] (http://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-6.html)で行ったことを思い出してください）。
 
+
+<!---
 After this we update the `nr` depends on the value of the `gsi_top`:
+--->
+このあと、`gsi_top`の値に基づいて、`nr`を更新します。
 
 ```C
 #if defined(CONFIG_PCI_MSI) || defined(CONFIG_HT_IRQ)
@@ -557,7 +613,11 @@ After this we update the `nr` depends on the value of the `gsi_top`:
 #endif
 ```
 
+<!---
 Update the `nr_irqs` if it less than `nr` and return the number of the legacy irqs:
+--->
+`nr_irqs`が`nr`より小さければ更新します。
+そして、レガシ割り込みの数を返します。
 
 ```C
 if (nr < nr_irqs)
@@ -567,20 +627,29 @@ return nr_legacy_irqs();
 }
 ```
 
+<!---
 The next after the `arch_probe_nr_irqs` is printing information about number of `IRQs`:
+--->
+`arch_probe_nr_irqs`のあとは、`IRQs`の数について情報を表示します。
 
 ```C
 printk(KERN_INFO "NR_IRQS:%d nr_irqs:%d %d\n", NR_IRQS, nr_irqs, initcnt);
 ```
 
+<!---
 We can find it in the [dmesg](https://en.wikipedia.org/wiki/Dmesg) output:
+--->
+[dmesg](https://en.wikipedia.org/wiki/Dmesg)の出力で見つけることができます：
 
 ```
 $ dmesg | grep NR_IRQS
 [    0.000000] NR_IRQS:4352 nr_irqs:488 16
 ```
 
+<!---
 After this we do some checks that `nr_irqs` and `initcnt` values is not greater than maximum allowable number of `irqs`:
+--->
+このあと、`nr_irqs`の値と`initcnt`の値が`irqs`の許可された最大値を超えていないことかチェックを行います。
 
 ```C
 if (WARN_ON(nr_irqs > IRQ_BITMAP_BITS))
@@ -590,7 +659,12 @@ if (WARN_ON(initcnt > IRQ_BITMAP_BITS))
     initcnt = IRQ_BITMAP_BITS;
 ```
 
+<!---
 where `IRQ_BITMAP_BITS` is equal to the `NR_IRQS` if the `CONFIG_SPARSE_IRQ` is not set and `NR_IRQS + 8196` in other way. In the next step we are going over all interrupt descriptors which need to be allocated in the loop and allocate space for the descriptor and insert to the `irq_desc_tree` [radix tree](http://0xax.gitbooks.io/linux-insides/content/DataStructures/radix-tree.html):
+--->
+`IRQ_BITMAP_BITS`は、`CONFIG_SPARSE_IRQ`がセットされていなければ、`NR_IRQS`と一致します。
+そうでない場合は、`NR_IRQS + 8196`と一致します。
+次のステップでは、ループ中で確保されるべきすべての割り込みデスクリプタについて、デスクリプタの領域確保を行い、`irq_desc_tree` [radix tree](http://0xax.gitbooks.io/linux-insides/content/DataStructures/radix-tree.html)に挿入します：
 
 ```C
 for (i = 0; i < initcnt; i++) {
@@ -600,22 +674,40 @@ for (i = 0; i < initcnt; i++) {
 }
 ```
 
+<!---
 In the end of the `early_irq_init` function we return the value of the call of the `arch_early_irq_init` function as we did it already in the previous variant when the `CONFIG_SPARSE_IRQ` option was not set:
+--->
+`early_irq_init`関数の最後で、`CONFIG_SPARSE_IRQ`オプションがセットされないとき、以前の例ですでに行ったように`arch_early_irq_init`関数の呼び出しの値を返します。
 
 ```C
 return arch_early_irq_init();
 ```
 
+<!---
 That's all.
+--->
+以上です。
 
 Conclusion
 --------------------------------------------------------------------------------
 
+<!---
 It is the end of the seventh part of the [Interrupts and Interrupt Handling](http://0xax.gitbooks.io/linux-insides/content/interrupts/index.html) chapter and we started to dive into external hardware interrupts in this part. We saw early initialization of the `irq_desc` structure which represents description of an external interrupt and contains information about it like list of irq actions, information about interrupt handler, interrupt's owner, count of the unhandled interrupt and etc. In the next part we will continue to research external interrupts.
+--->
+[Interrupts and Interrupt Handling](http://0xax.gitbooks.io/linux-insides/content/interrupts/index.html)
+の第7回の終わりです。
+この回は、外部ハードウェア割り込みへのダイブの始まりでした。
+外部割り込みの記述を表し、irq actionに関する情報と割り込みハンドラに関する情報、割り込みオーナー、未処理割り込みの数などを含む`irq_desc`構造体の早期の初期化を見ました。
+次回は外部割り込みの研究を続けます。
 
+
+<!---
 If you have any questions or suggestions write me a comment or ping me at [twitter](https://twitter.com/0xAX).
+--->
 
+<!---
 **Please note that English is not my first language, And I am really sorry for any inconvenience. If you find any mistakes please send me PR to [linux-insides](https://github.com/0xAX/linux-insides).**
+--->
 
 Links
 --------------------------------------------------------------------------------
