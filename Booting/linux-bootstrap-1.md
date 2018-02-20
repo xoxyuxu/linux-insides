@@ -6,29 +6,56 @@ From the bootloader to the kernel
 
 If you have been reading my previous [blog posts](https://0xax.github.io/categories/assembler/), then you can see that, for some time now, I have been starting to get involved with low-level programming. I have written some posts about assembly programming for `x86_64` Linux and, at the same time, I have also started to dive into the Linux kernel source code.
 
+もしあなたが私の過去の[ブログの投稿](https://0xax.github.io/categories/assembler/)を読んだのなら、これまでの間、私はローレベルプログラミングに関与してしまっていることをあなたは理解することが出来る。私はこれまでの間`x86_64` Linuxのアセンブラプログラムについての幾つかの投稿について書いてきているし、Linuxxカーネルソースコードに没頭し始めてもいる。
+
 I have a great interest in understanding how low-level things work, how programs run on my computer, how they are located in memory, how the kernel manages processes and memory, how the network stack works at a low level, and many many other things. So, I have decided to write yet another series of posts about the Linux kernel for the **x86_64** architecture.
+
+私はローレベルの動作、私のコンピューター上でのプログラムの動作、それらのメモリ配置、カーネルのプロセスとメモリの管理、ローレベルでのネットワークスタックの動作、など色々な手法について大変興味を持っている。
+そして、私は**x86_64**アーキテクチャに関するLinuxカーネルに関する他の一連の投稿を今のところ書くことを決心している。
 
 Note that I'm not a professional kernel hacker and I don't write code for the kernel at work. It's just a hobby. I just like low-level stuff, and it is interesting for me to see how these things work. So if you notice anything confusing, or if you have any questions/remarks, ping me on Twitter [0xAX](https://twitter.com/0xAX), drop me an [email](anotherworldofworld@gmail.com) or just create an [issue](https://github.com/0xAX/linux-insides/issues/new). I appreciate it.
 
+注意事項。私はプロのカーネルハッカーではないし仕事としてカーネルのコードを書いてはいない。これは趣味だ。私はローレベル関することが好きだ。そしてそれらがどのように動作するのか理解する事に興味を持っている。そしてもしあなたが何らか混乱していることに気づいたか、質問や意見があるならTwitter [0xAX](https://twitter.com/0xAX)にツイート、[メール](anotherworldofworld@gmail.com)にてご一報、またはGitHubの[issue](https://github.com/0xAX/linux-insides/issues/new)を作成してください。ありがたく思います。
+
 All posts will also be accessible at [github repo](https://github.com/0xAX/linux-insides) and, if you find something wrong with my English or the post content, feel free to send a pull request.
+
+全ての投稿は[github repo](https://github.com/0xAX/linux-insides)もで閲覧することが出来、もし私の英語や投稿した内容についての間違いを見つけたのならお気軽にプルリクエストを送ってください。
 
 *Note that this isn't official documentation, just learning and sharing knowledge.*
 
+*注意事項。これは公式のドキュメントではなく、知識の学習や共有である。
+
 **Required knowledge**
 
+**要求される知識**
+
 * Understanding C code
+
+* C言語に関する理解
+
 * Understanding assembly code (AT&T syntax)
+
+* アセンブラコードに関する理解 (AT&Tシンタックス)
 
 Anyway, if you are just starting to learn such tools, I will try to explain some parts during this and the following posts. Alright, this is the end of the simple introduction, and now we can start to dive into the Linux kernel and low-level stuff.
 
+とにかく、もしあなたが手段として学習し始めたのなら、これや次の投稿のいくつかの章で説明します。大丈夫、これは簡単な導入部の終わりです。そして今私たちはLinuxカーネルやローレベルに関することに没頭することを始めることが出来ます。
+
 I've started to write this book at the time of the `3.18` Linux kernel, and many things might change from that time. If there are changes, I will update the posts accordingly.
+
+私は`3.18` Linuxカーネル時にこの本を書き始めています。そしてその時からたくさんのことが変更になったかもしれません。もし変更があるのならそれに応じて投稿を更新します。
 
 The Magical Power Button, What happens next?
 --------------------------------------------------------------------------------
 
 Although this is a series of posts about the Linux kernel, we will not be starting directly from the kernel code - at least not, in this paragraph. As soon as you press the magical power button on your laptop or desktop computer, it starts working. The motherboard sends a signal to the [power supply](https://en.wikipedia.org/wiki/Power_supply) device. After receiving the signal, the power supply provides the proper amount of electricity to the computer. Once the motherboard receives the [power good signal](https://en.wikipedia.org/wiki/Power_good_signal), it tries to start the CPU. The CPU resets all leftover data in its registers and sets up predefined values for each of them.
 
+これがLinuxカーネルに関する一連の投稿であるにも関わらず、少なくともこの節では我々はカーネルコードから直接開始することは無いでしょう。あなたのノートPCやデスクトップPCの不思議な電源スイッチを押すやいなや、コンピューターは動作し始める。マザーボードは[電源](https://en.wikipedia.org/wiki/Power_supply)デバイスに信号を送る。信号を受信した後、電源は適切な量の電力を供給する。一度マザーボードが[パワーグッド信号](https://en.wikipedia.org/wiki/Power_good_signal)を受け取ると、CPUを動作させるよう試みる。CPUは全てのレジスタに残っているデータをリセットし、リセットによりそれら値は初期設定値になる。
+
+
 The [80386](https://en.wikipedia.org/wiki/Intel_80386) CPU and later define the following predefined data in CPU registers after the computer resets:
+
+[80386](https://en.wikipedia.org/wiki/Intel_80386) CPUやそれ以降の製品はコンピューターがリセットされた後、CPUのレジスタは次のプリデファインされたデータになる。
 
 ```
 IP          0xfff0
@@ -37,16 +64,24 @@ CS base     0xffff0000
 ```
 
 The processor starts working in [real mode](https://en.wikipedia.org/wiki/Real_mode). Let's back up a little and try to understand [memory segmentation](https://en.wikipedia.org/wiki/Memory_segmentation) in this mode. Real mode is supported on all x86-compatible processors, from the [8086](https://en.wikipedia.org/wiki/Intel_8086) CPU all the way to the modern Intel 64-bit CPUs. The `8086` processor has a 20-bit address bus, which means that it could work with a `0-0xFFFFF` or `1 megabyte` address space. But it only has `16-bit` registers, which have a maximum address of `2^16 - 1` or `0xffff` (64 kilobytes).
+プロセッサーは[リアルモード](https://en.wikipedia.org/wiki/Real_mode)で動作し始めます。少し話を戻させてください。そしてこのモードでの[メモリセグメンテーション](https://en.wikipedia.org/wiki/Memory_segmentation) について理解していきましょう。リアルモードは[8086](https://en.wikipedia.org/wiki/Intel_8086) CPUから現代のIntel 64-bit CPUまでの全てのx86互換プロセッサーでサポートされています。`8086` プロセッサーは
+`0-0xFFFFF` または `1メガバイト` のアドレス空間と連携して動作することが出来る事を意味する20bitのアドレスバスを持っています。しかし`16-bit`のレジスタしか持っていないため、最大アドレスは`2^16 - 1` または `0xffff` (64キロバイト)になります。
 
 [Memory segmentation](http://en.wikipedia.org/wiki/Memory_segmentation) is used to make use of all the address space available. All memory is divided into small, fixed-size segments of `65536` bytes (64 KB). Since we cannot address memory above `64 KB` with 16-bit registers, an alternate method was devised.
 
+[メモリセグメンテーション](http://en.wikipedia.org/wiki/Memory_segmentation) はすべての有効なアドレス空間を使うために使われる。全てのメモリは小さな、`65536` バイト (64 KB)の固定サイズのセグメントに分割されている。我々は16-bitのレジスタで`64 KB`を超えたメモリをアドレッシングすることが出来ないので、代替手法として考え出された。
+
 An address consists of two parts: a segment selector, which has a base address, and an offset from this base address. In real mode, the associated base address of a segment selector is `Segment Selector * 16`. Thus, to get a physical address in memory, we need to multiply the segment selector part by `16` and add the offset to it:
+
+アドレスは、ベースアドレスを持つセグメントセレクターとこのベースアドレスからのオフセット、この2つから構成される。リアルモードでは、セグメントセレクターに関連したベースアドレスは`Segment Selector * 16`となる。このように、メモリの物理アドレスを得るために、我々はセグメントセレクタに`16`を掛け合わせ、それに対してオフセットを加算する必要がある。
 
 ```
 PhysicalAddress = Segment Selector * 16 + Offset
 ```
 
 For example, if `CS:IP` is `0x2000:0x0010`, then the corresponding physical address will be:
+
+例えば、もし`CS:IP` が `0x2000:0x0010` なら、該当する物理アドレスは次のようにな。
 
 ```python
 >>> hex((0x2000 << 4) + 0x0010)
@@ -55,6 +90,8 @@ For example, if `CS:IP` is `0x2000:0x0010`, then the corresponding physical addr
 
 But, if we take the largest segment selector and offset, `0xffff:0xffff`, then the resulting address will be:
 
+しかし、もし最も大きいセグメントれセクターとオフセット、`0xffff:0xffff`であった場合は、アドレスは次のようになる。
+
 ```python
 >>> hex((0xffff << 4) + 0xffff)
 '0x10ffef'
@@ -62,11 +99,20 @@ But, if we take the largest segment selector and offset, `0xffff:0xffff`, then t
 
 which is `65520` bytes past the first megabyte. Since only one megabyte is accessible in real mode, `0x10ffef` becomes `0x00ffef` with the [A20 line](https://en.wikipedia.org/wiki/A20_line) disabled.
 
+`65520`バイトは先頭のアドレス部分に現れる。リアルモードでは1メガバイトしかアクセス出来ないため、`0x10ffef`は[A20 line](https://en.wikipedia.org/wiki/A20_line)がディセーブルであることから`0x00ffef`になる。
+
+
 Ok, now we know a little bit about real mode and memory addressing in this mode. Let's get back to discussing register values after reset.
+
+OK。今このモードでのリアルモードとメモリアドレッシングについて若干知っている。さあリセット後のレジスタ値についての議論に戻ろう。
 
 The `CS` register consists of two parts: the visible segment selector, and the hidden base address. While the base address is normally formed by multiplying the segment selector value by 16, during a hardware reset the segment selector in the CS register is loaded with `0xf000` and the base address is loaded with `0xffff0000`; the processor uses this special base address until `CS` is changed.
 
+`CS`レジスタはビジブルセグメントセレクタと上位のベースアドレスの2つの要素から構成される。ベースアドレスが通常セグメントセレクタの16倍としていると同時、ハードウェアリセット中にCSレジスタのセグメントセレクタは`0xf000`、ベースアドレスは`0xffff0000`となる。プロセッサーは`CS`が変更されるまで特別なベースアドレスとして使用する。
+
 The starting address is formed by adding the base address to the value in the EIP register:
+
+開始アドレスはベースアドレスにEIPレジスタの値を加算したもので形成される。
 
 ```python
 >>> 0xffff0000 + 0xfff0
@@ -74,6 +120,8 @@ The starting address is formed by adding the base address to the value in the EI
 ```
 
 We get `0xfffffff0`, which is 16 bytes below 4GB. This point is called the [Reset vector](http://en.wikipedia.org/wiki/Reset_vector). This is the memory location at which the CPU expects to find the first instruction to execute after reset. It contains a [jump](http://en.wikipedia.org/wiki/JMP_%28x86_instruction%29) (`jmp`) instruction that usually points to the BIOS entry point. For example, if we look in the [coreboot](http://www.coreboot.org/) source code (`src/cpu/x86/16bit/reset16.inc`), we will see:
+
+我々は4GBの手前の16バイトである`0xfffffff0`を得る。このポイントは[リセットベクター](http://en.wikipedia.org/wiki/Reset_vector)と呼ばれる。これはCPUがリセット後実行する最初の命令を見つけることを期待したメモリ配置である。通常BIOSのエントリーポイントを示した[ジャンプ](http://en.wikipedia.org/wiki/JMP_%28x86_instruction%29) (`jmp`)命令で構成される。例えば,[coreboot](http://www.coreboot.org/) のソースコード (`src/cpu/x86/16bit/reset16.inc`)を見ると以下のようになっている。
 
 ```assembly
     .section ".reset"
@@ -87,7 +135,11 @@ reset_vector:
 
 Here we can see the `jmp` instruction [opcode](http://ref.x86asm.net/coder32.html#xE9), which is `0xe9`, and its destination address at `_start - ( . + 2)`.
 
+ここで`0xe9` とジャンプ先アドレスから2を引いた値 `_start - ( . + 2)` である`jmp` 命令 [opcode](http://ref.x86asm.net/coder32.html#xE9)を見ることが出来る。
+
 We can also see that the `reset` section is `16` bytes and that is compiled to start from `0xfffffff0` address (`src/cpu/x86/16bit/reset16.lds`):
+
+我々は`reset` セクションが `16` バイトでかつ`0xfffffff0` アドレス (`src/cpu/x86/16bit/reset16.lds`)から開始されるようにコンパイルしてあることを確認できる。
 
 ```
 SECTIONS {
@@ -103,7 +155,11 @@ SECTIONS {
 
 Now the BIOS starts; after initializing and checking the hardware, the BIOS needs to find a bootable device. A boot order is stored in the BIOS configuration, controlling which devices the BIOS attempts to boot from. When attempting to boot from a hard drive, the BIOS tries to find a boot sector. On hard drives partitioned with an [MBR partition layout](https://en.wikipedia.org/wiki/Master_boot_record), the boot sector is stored in the first `446` bytes of the first sector, where each sector is `512` bytes. The final two bytes of the first sector are `0x55` and `0xaa`, which designates to the BIOS that this device is bootable.
 
+今 BIOSが開始されます。初期化とハードウェアの確認の後で、BIOSはブート可能なデバイスを発見する必要がある。ブート順はBIOSのコンフィグレーション領域に格納され、BIOSがそこに記載されているデバイスから起動を試みるように制御される。ハードディスクから起動を試みる時、BIOSはブートセクターを探す。[MBRパーティション](https://en.wikipedia.org/wiki/Master_boot_record)で分割されたハードディスク上に、ブートセクターはセクタ単位が`512`バイトである最初のセクターの先頭`446`バイトに記録されている。この最初のセクターの最後の2バイトにBIOSがブート可能デバイスであることをを示すために`0x55` と `0xaa`が記録されている。
+
 For example:
+
+例:
 
 ```assembly
 ;
@@ -128,11 +184,15 @@ db 0xaa
 
 Build and run this with:
 
+以下のコマンドでビルドと実行
+
 ```
 nasm -f bin boot.nasm && qemu-system-x86_64 boot
 ```
 
 This will instruct [QEMU](http://qemu.org) to use the `boot` binary that we just built as a disk image. Since the binary generated by the assembly code above fulfills the requirements of the boot sector (the origin is set to `0x7c00` and we end with the magic sequence), QEMU will treat the binary as the master boot record (MBR) of a disk image.
+
+これは[QEMU]が今しがたディスクイメージとしてビルドした`boot`バイナリーを使うことを指示する。
 
 You will see:
 
