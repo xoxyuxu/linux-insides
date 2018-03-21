@@ -88,7 +88,7 @@ On other languages
 |├ [4.5](https://github.com/xoxyuxu/linux-insides-ja/blob/master/SysCall/syscall-5.md)|||
 |└ [4.6](https://github.com/xoxyuxu/linux-insides-ja/blob/master/SysCall/syscall-6.md)|||
 | 5. [Timers and time management](https://github.com/xoxyuxu/linux-insides-ja/tree/master/Timers)|||
-|├ [5.0](https://github.com/xoxyuxu/linux-insides-ja/blob/master/Timers/README.md)|||
+|├ [5.0](https://github.com/xoxyuxu/linux-insides-ja/blob/master/Timers/README.md)| @satomicchy ||
 |├ [5.1](https://github.com/xoxyuxu/linux-insides-ja/blob/master/Timers/timers-1.md)|||
 |├ [5.2](https://github.com/xoxyuxu/linux-insides-ja/blob/master/Timers/timers-2.md)|||
 |├ [5.3](https://github.com/xoxyuxu/linux-insides-ja/blob/master/Timers/timers-3.md)|||
