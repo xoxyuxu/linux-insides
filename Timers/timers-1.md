@@ -2,22 +2,35 @@ Timers and time management in the Linux kernel. Part 1.
 ================================================================================
 
 Introduction
+導入
 --------------------------------------------------------------------------------
 
 This is yet another post that opens a new chapter in the [linux-insides](http://0xax.gitbooks.io/linux-insides/content/) book. The previous [part](https://0xax.gitbooks.io/linux-insides/content/SysCall/syscall-4.html) described [system call](https://en.wikipedia.org/wiki/System_call) concepts, and now it's time to start new chapter. As one might understand from the title, this chapter will be devoted to the `timers` and `time management` in the Linux kernel. The choice of topic for the current chapter is not accidental. Timers (and generally, time management) are very important and widely used in the Linux kernel. The Linux kernel uses timers for various tasks, for example different timeouts in the [TCP](https://en.wikipedia.org/wiki/Transmission_Control_Protocol) implementation, the kernel knowing current time, scheduling asynchronous functions, next event interrupt scheduling and many many more.
 
+これは、 [linux-insides](http://0xax.gitbooks.io/linux-insides/content/) 本の新しい章に関するもう一つの投稿です。前の [part](https://0xax.gitbooks.io/linux-insides/content/SysCall/syscall-4.html) は [system call](https://en.wikipedia.org/wiki/System_call) の概念を説明しましたので、新しい章を始めましょう。タイトルからわかるように、この章はタイマーとタイムマネジメントに焦点をあてます。このトピックの選択、附帯的なものではありません。タイマー（一般的にはタイムマネジメント）はとても重要で、カーネル内で広く使われています。カーネルはタイマーを様々なタスク、例えば [TCP](https://en.wikipedia.org/wiki/Transmission_Control_Protocol) 実装の異なるタイムアウト、カーネル自身の現在時刻の把握、非同期処理のスケジューリング、イベント割り込みのスケジューリングなど、もっと様々なものに利用しています。
+
 So, we will start to learn implementation of the different time management related stuff in this part. We will see different types of timers and how different Linux kernel subsystems use them. As always, we will start from the earliest part of the Linux kernel and go through the initialization process of the Linux kernel. We already did it in the special [chapter](https://0xax.gitbooks.io/linux-insides/content/Initialization/index.html) which describes the initialization process of the Linux kernel, but as you may remember we missed some things there. And one of them is the initialization of timers.
+
+そのため、タイムマネジメントをこれらに関連付ける実装の違いを知るところから始めましょう。異なるタイプのタイマーと、カーネルサブシステムがそれらを使う方法についてわかるでしょう。通例どおり、カーネルの最も古い部分から始めましょう。そして、カーネルの初期設定プロセスへと進みます。初期設定については [chapter](https://0xax.gitbooks.io/linux-insides/content/Initialization/index.html) で見てきましたが、私たちが逃したものもあります。その中の一つが、タイマーの初期設定です。
 
 Let's start.
 
-Initialization of non-standard PC hardware clock
+それでは始めましょう。
+
+非標準PCハードウエアクロックの初期化
 --------------------------------------------------------------------------------
 
 After the Linux kernel was decompressed (more about this you can read in the [Kernel decompression](https://0xax.gitbooks.io/linux-insides/content/Booting/linux-bootstrap-5.html) part) the architecture non-specific code starts to work in the [init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c) source code file. After initialization of the [lock validator](https://www.kernel.org/doc/Documentation/locking/lockdep-design.txt), initialization of [cgroups](https://en.wikipedia.org/wiki/Cgroups) and setting [canary](https://en.wikipedia.org/wiki/Buffer_overflow_protection) value we can see the call of the `setup_arch` function.
 
+カーネルが展開（もっと知りたい方は  [Kernel decompression](https://0xax.gitbooks.io/linux-insides/content/Booting/linux-bootstrap-5.html) に紹介されています）されたあと、[init/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/init/main.c) ファイルでアーキテクチャ非特定コードが動き始めます。[lock validator](https://www.kernel.org/doc/Documentation/locking/lockdep-design.txt) の初期設定、 [cgroups](https://en.wikipedia.org/wiki/Cgroups) の初期設定、 [canary](https://en.wikipedia.org/wiki/Buffer_overflow_protection) value セッティングののち、 `setup_arch` の呼び出しを確認することができます。
+
 As you may remember, this function (defined in the [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c#L842)) prepares/initializes architecture-specific stuff (for example it reserves a place for [bss](https://en.wikipedia.org/wiki/.bss) section, reserves a place for [initrd](https://en.wikipedia.org/wiki/Initrd), parses kernel command line, and many, many other things). Besides this, we can find some time management related functions there.
 
+覚えているように、このファンクション ( [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c#L842) で定義されています) は、アーキテクチャ固有のものを初期化します。 (例えば、 [bss](https://en.wikipedia.org/wiki/.bss) セクションや [initrd](https://en.wikipedia.org/wiki/Initrd) のための場所を予約し、カーネルコマンドラインやその他たくさんのものを解析します。) その脇で、機能に関連づけられたいくつかのタイムマネジメントを見つけることができます。
+
 The first is:
+
+最初はこちらです。
 
 ```C
 x86_init.timers.wallclock_init();
@@ -25,7 +38,11 @@ x86_init.timers.wallclock_init();
 
 We already saw `x86_init` structure in the chapter that describes initialization of the Linux kernel. This structure contains pointers to the default setup functions for the different platforms like [Intel MID](https://en.wikipedia.org/wiki/Mobile_Internet_device#Intel_MID_platforms), [Intel CE4100](http://www.wpgholdings.com/epaper/US/newsRelease_20091215/255874.pdf), etc. The `x86_init` structure is defined in the [arch/x86/kernel/x86_init.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/x86_init.c#L36), and as you can see it determines standard PC hardware by default.
 
+すでに、カーネルの初期化を説明した章で `x86_init` ストラクチャーを見てきました。このストラクチャーは、 [Intel MID](https://en.wikipedia.org/wiki/Mobile_Internet_device#Intel_MID_platforms) や [Intel CE4100](http://www.wpgholdings.com/epaper/US/newsRelease_20091215/255874.pdf) のような異なるプラットフォームのデフォルトのセットアップファンクションへのポインターを含んでいます。 `x86_init` ストラクチャーは、〜に定義されており、デフォルトで標準的なPCハードウエアを測定できます。
+
 As we can see, the `x86_init` structure has the `x86_init_ops` type that provides a set of functions for platform specific setup like reserving standard resources, platform specific memory setup, initialization of interrupt handlers, etc. This structure looks like:
+
+`x86_init` ストラクチャーは、標準リソース、プラットフォームに特化したメモリセットアップ、割り込みハンドラーの初期化など、プラットフォーム固有の機能を提供する `x86_init_ops` タイプを持っています。このストラクチャーは、次のようなものです。
 
 ```C
 struct x86_init_ops {
@@ -42,12 +59,21 @@ struct x86_init_ops {
 
 Note the `timers` field that has the `x86_init_timers` type. We can understand by its name that this field is related to time management and timers. `x86_init_timers` contains four fields which are all functions that returns pointer on [void](https://en.wikipedia.org/wiki/Void_type):
 
+特に `timers` フィールドは `x86_init_timers` タイプになっています。その名前から、このフィールドがタイムマネジメントとタイマーに関連があるものだと理解することができます。 `x86_init_timers` は、[ボイド](https://en.wikipedia.org/wiki/Void_type) ポインターを返す機能である4つのフィールドを含みます。
+
 * `setup_percpu_clockev` - set up the per cpu clock event device for the boot cpu;
 * `tsc_pre_init` - platform function called before [TSC](https://en.wikipedia.org/wiki/Time_Stamp_Counter) init;
 * `timer_init` - initialize the platform timer;
 * `wallclock_init` - initialize the wallclock device.
 
+* `setup_percpu_clockev` - cpuごとにあるcpuブートデバイスのためのクロックイベントのセットアップ
+* `tsc_pre_init` - [TSC](https://en.wikipedia.org/wiki/Time_Stamp_Counter) initの前にプラットフォーム機能が呼ばれる設定
+* `timer_init` - プラットフォームタイマーの初期化
+* `wallclock_init` - wallclockデバイスの初期化
+
 So, as we already know, in our case the `wallclock_init` executes initialization of the wallclock device. If we look on the `x86_init` structure, we see that `wallclock_init` points to the `x86_init_noop`:
+
+ここで出てきた `wallclock_init` は、wallclockデバイスの初期化を実行します。 `x86_init` ストラクチャーを見ると、 `wallclock_init` は `x86_init_noop` のことを指していることがわかります。
 
 ```C
 struct x86_init_ops x86_init __initdata = {
@@ -65,11 +91,15 @@ struct x86_init_ops x86_init __initdata = {
 
 Where the `x86_init_noop` is just a function that does nothing:
 
+`x86_init_noop` 自体は、標準的なPCハードウエアに対しては何もしていないファンクションです。
+
 ```C
 void __cpuinit x86_init_noop(void) { }
 ```
 
 for the standard PC hardware. Actually, the `wallclock_init` function is used in the [Intel MID](https://en.wikipedia.org/wiki/Mobile_Internet_device#Intel_MID_platforms) platform. Initialization of the `x86_init.timers.wallclock_init` is located in the [arch/x86/platform/intel-mid/intel-mid.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/platform/intel-mid/intel-mid.c) source code file in the `x86_intel_mid_early_setup` function:
+
+実は、 `wallclock_init` ファンクションは、 [Intel MID](https://en.wikipedia.org/wiki/Mobile_Internet_device#Intel_MID_platforms) で使われています。 `x86_init.timers.wallclock_init` の初期設定は、 [arch/x86/platform/intel-mid/intel-mid.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/platform/intel-mid/intel-mid.c) ファイルの `x86_intel_mid_early_setup` にあります。
 
 ```C
 void __init x86_intel_mid_early_setup(void)
@@ -85,6 +115,8 @@ void __init x86_intel_mid_early_setup(void)
 ```
 
 Implementation of the `intel_mid_rtc_init` function is in the [arch/x86/platform/intel-mid/intel_mid_vrtc.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/platform/intel-mid/intel_mid_vrtc.c) source code file and looks pretty simple. First of all, this function parses [Simple Firmware Interface](https://en.wikipedia.org/wiki/Simple_Firmware_Interface) M-Real-Time-Clock table for getting such devices to the `sfi_mrtc_array` array and initialization of the `set_time` and `get_time` functions:
+
+`intel_mid_rtc_init` ファンクションの実装は、 [arch/x86/platform/intel-mid/intel_mid_vrtc.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/platform/intel-mid/intel_mid_vrtc.c) にあって、とてもシンプルです。まずはじめに、このファンクションは、 `sfi_mrtc_array` 配列と `set_time` と `get_time` ファンクションの初期化のために [Simple Firmware Interface](https://en.wikipedia.org/wiki/Simple_Firmware_Interface) M-Real-Time-Clock テーブルを解析します。
 
 ```C
 void __init intel_mid_rtc_init(void)
@@ -107,10 +139,15 @@ void __init intel_mid_rtc_init(void)
 
 That's all, after this a device based on `Intel MID` will be able to get time from the hardware clock. As I already wrote, the standard PC [x86_64](https://en.wikipedia.org/wiki/X86-64) architecture does not support `x86_init_noop` and just do nothing during call of this function. We just saw initialization of the [real time clock](https://en.wikipedia.org/wiki/Real-time_clock) for the [Intel MID](https://en.wikipedia.org/wiki/Mobile_Internet_device#Intel_MID_platforms) architecture, now it's time to return to the general `x86_64` architecture and will look on the time management related stuff there.
 
+これが、 `Intel MID` ベースのデバイスがハードウエアクロックから時間を取ったあとにやることです。すでに書いたように、標準的なPC [x86_64](https://en.wikipedia.org/wiki/X86-64) アーキテクチャは、 `x86_init_noop` をサポートせず、このファンクションを読んでも何もしません。 [Intel MID](https://en.wikipedia.org/wiki/Mobile_Internet_device#Intel_MID_platforms) アーキテクチャの [real time clock](https://en.wikipedia.org/wiki/Real-time_clock) の初期化だけを取り上げましたが、今度は一般の `x86_64` アーキテクチャに戻って、ここに関係あるタイムマネジメントを見てみましょう。
+
 Acquainted with jiffies
+jiffiesの周辺
 --------------------------------------------------------------------------------
 
 If we return to the `setup_arch` function (which is located, as you remember, in the  [arch/x86/kernel/setup.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/kernel/setup.c#L842) source code file), we see the next call of the time management related function:
+
+`setup_arch` ファンクションに戻ると、タイムマネジメントの次の呼び出しを見ることができます。
 
 ```C
 register_refined_jiffies(CLOCK_TICK_RATE);
@@ -118,17 +155,24 @@ register_refined_jiffies(CLOCK_TICK_RATE);
 
 Before we look at the implementation of this function, we must know about [jiffy](https://en.wikipedia.org/wiki/Jiffy_%28time%29). As we can read on wikipedia:
 
+このファンクションの実行を見る前に、 [jiffy](https://en.wikipedia.org/wiki/Jiffy_%28time%29) について知らなければなりません。wikipediaによると、
+
 ```
 Jiffy is an informal term for any unspecified short period of time
+Jiffyは、特定されない短時間の非公式の期間です。
 ```
 
 This definition is very similar to the `jiffy` in the Linux kernel. There is global variable with the `jiffies` which holds the number of ticks that have occurred since the system booted. The Linux kernel sets this variable to zero:
+
+この説明は、カーネルの `jiffy` にとても近いものです。システムブート以降に起こるたくさんのticksを保持する `jiffies`と一体となったグローバル変数があります。
 
 ```C
 extern unsigned long volatile __jiffy_data jiffies;
 ```
 
 during initialization process. This global variable will be increased each time during timer interrupt. Besides this, near the `jiffies` variable we can see the definition of the similar variable
+
+初期化しているとき、このグローバル変数は、タイマー割り込みの間、時間ごとに増やされます。それと同時に、 `jiffies` variableに近い・・・・・・・
 
 ```C
 extern u64 jiffies_64;
