@@ -49,8 +49,8 @@ On other languages
 | 章 | 翻訳者 | 進捗状況 |
 | ------------- |:-------------:| -----:|
 | 1. [Booting](https://github.com/xoxyuxu/linux-insides-ja/tree/master/Booting)|||
-|├ [1.0](https://github.com/xoxyuxu/linux-insides-ja/blob/master/Booting/README.md)|||
-|├ [1.1](https://github.com/xoxyuxu/linux-insides-ja/blob/master/Booting/linux-bootstrap-1.md)|||
+|├ [1.0](https://github.com/xoxyuxu/linux-insides-ja/blob/master/Booting/README.md)|@watari3|finished|
+|├ [1.1](https://github.com/xoxyuxu/linux-insides-ja/blob/master/Booting/linux-bootstrap-1.md)|@watari3|finished|
 |├ [1.2](https://github.com/xoxyuxu/linux-insides-ja/blob/master/Booting/linux-bootstrap-2.md)|||
 |├ [1.3](https://github.com/xoxyuxu/linux-insides-ja/blob/master/Booting/linux-bootstrap-3.md)|||
 |├ [1.4](https://github.com/xoxyuxu/linux-insides-ja/blob/master/Booting/linux-bootstrap-4.md)|||
