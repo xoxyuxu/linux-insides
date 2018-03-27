@@ -2,9 +2,14 @@ Kernel booting process. Part 2.
 ================================================================================
 
 First steps in the kernel setup
+
+カーネルセットアップの第一歩
+
 --------------------------------------------------------------------------------
 
 We started to dive into the linux kernel's insides in the previous [part](linux-bootstrap-1.md) and saw the initial part of the kernel setup code. We stopped at the first call to the `main` function (which is the first function written in C) from [arch/x86/boot/main.c](https://github.com/torvalds/linux/blob/16f73eb02d7e1765ccab3d2018e0bd98eb93d973/arch/x86/boot/main.c).
+
+我々は前の[パート](linux-bootstrap-1.md)で
 
 In this part, we will continue to research the kernel setup code and go over
 * what `protected mode` is,
